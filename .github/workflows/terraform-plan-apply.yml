@@ -252,7 +252,7 @@ jobs:
 
       - name: Upload Artifact
         if: ${{ steps.plan.outputs.plan-exitcode == 2 && github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: ./repo/terraform.tar
