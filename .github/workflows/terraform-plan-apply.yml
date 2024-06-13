@@ -68,7 +68,7 @@ jobs:
         run: |
           echo "::set-output name=GIT_BRANCH::${{ github.base_ref }}"
 
-      - uses: winterjung/split@v1
+      - uses: winterjung/split@v2
         if: ${{ github.event_name != 'pull_request' }}
         id: split
         with:
