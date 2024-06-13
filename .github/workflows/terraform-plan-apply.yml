@@ -150,7 +150,7 @@ jobs:
       #     go-version: "~>1.16.1" # The Go version to download (if necessary) and use.
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v1
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -276,7 +276,7 @@ jobs:
           tar -xvf terraform.tar
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v1
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
