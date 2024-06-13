@@ -1,0 +1,329 @@
+name: Infrastructure Build
+
+###
+# Set workflow wide environment variables here:
+# - see https://docs.github.com/en/actions/reference/environments
+# - see https://docs.github.com/en/actions/reference/environment-variables
+# - see https://docs.github.com/en/actions/reference/encrypted-secrets
+# - see https://www.terraform.io/docs/cli/config/environment-variables.html#tf_var_name
+# - see https://docs.github.com/en/actions/reference/events-that-trigger-workflows
+#
+# There should be environments in GitHub that match your branch name.
+# Environment variables and secrets are scoped to the most specific use case
+# Leaving the secrets defined here will scope them to the environment called.
+# i.e. Branch "main" is production and GitHub will have an Environment ...
+# named "main" in which you put environment specific secrets.
+# There should also be a file named after your branch that has the .tfvars extension.
+# This file is used by Terraform for it's variables and you should place environment
+# specific settings there. In the event you need runtime environment variables
+# passed to Terraform, use TF_VAR_* settings.
+###
+
+# - see https://docs.github.com/en/actions/reference/environment-variables
+env:
+  TF_VERSION: 1.2.8
+  TF_IN_AUTOMATION: true
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+
+# - see https://docs.github.com/en/actions/reference/events-that-trigger-workflows
+# - see https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#onevent_nametypes
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+      - prod
+     
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - dev
+      - prod
+      
+defaults:
+  run:
+    shell: bash --noprofile --norc -o pipefail {0}
+
+### Runner info
+# Unless you need to access the Kroger network, you can use built in runners
+# Otherwise, set your runs-on as one of the following depending on your needs:
+# runs-on: ["self-hosted", "kroger"]
+# runs-on: ["self-hosted", "tsa"]
+###
+
+jobs:
+  # setup some environment settings ok
+  bootstrap:
+    runs-on: self-hosted
+    outputs:
+      ENVIRONMENT: ${{ steps.env.outputs.ENVIRONMENT }}
+      IS_PRODUCTION: ${{ steps.env.outputs.IS_PRODUCTION }}
+    steps:
+      - name: Determine Environment
+        if: ${{ github.event_name == 'pull_request' }}
+        id: pr
+        run: |
+          echo "::set-output name=GIT_BRANCH::${{ github.base_ref }}"
+
+      - uses: winterjung/split@v1
+        if: ${{ github.event_name != 'pull_request' }}
+        id: split
+        with:
+          seperator: "/"
+          msg: ${{ github.ref }}
+      - name: Determine Environment
+        if: ${{ github.event_name != 'pull_request' }}  
+        id: branch
+        run: |
+          echo "::set-output name=GIT_BRANCH::${{ steps.split.outputs._2 }}"
+
+      - name: Set Environments
+        id: env
+        env:
+          GIT_BRANCH: ${{ steps.branch.outputs.GIT_BRANCH }}
+          PR_GIT_BRANCH: ${{ steps.pr.outputs.GIT_BRANCH }}
+        run: |
+          if [[ $GIT_BRANCH != "" ]]; then
+            echo "::set-output name=ENVIRONMENT::$GIT_BRANCH"; export ENVIRONMENT=${GIT_BRANCH}
+          else
+            echo "::set-output name=ENVIRONMENT::$PR_GIT_BRANCH"; export ENVIRONMENT=${PR_GIT_BRANCH}
+          fi
+          if [[ $ENVIRONMENT == "main" || $ENVIRONMENT == "master" ]]; then
+            echo "::set-output name=IS_PRODUCTION::1"
+          else
+            echo "::set-output name=IS_PRODUCTION::0"
+          fi
+
+  # plan the changes
+  plan:
+    needs: bootstrap
+    if: needs.bootstrap.result == 'success'
+    environment:
+      name: ${{ needs.bootstrap.outputs.ENVIRONMENT }}
+    defaults:
+      run:
+        working-directory: ./repo
+        shell: bash --noprofile --norc -o pipefail {0}
+               #echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
+    runs-on: on-prem
+    outputs:
+      plan-exitcode: ${{ steps.plan.outputs.plan-exitcode }}
+    steps:
+      # checkout self -- this must be first so the .gitconfig is generated
+      - name: Clone self
+        uses: actions/checkout@v2
+        with:
+          path: ./repo
+
+      # # this section is required if downloading other internal github repos
+      # - name: Checkout token action
+      #   uses: actions/checkout@v2
+      #   with:
+      #     repository: krogertechnology/create-github-server-token
+      #     ssh-key: ${{ secrets.SHARED_ACTIONS_DEPLOY_KEY }}
+      #     path: ./helpers/create-github-server-token
+
+      # - name: Generate GitHub Token
+      #   uses: ./helpers/create-github-server-token
+      #   id: create-token
+      #   with:
+      #     app-id: 113638
+      #     private-key: ${{ secrets.PRIVATE_KEY }}
+      #     client-id: ${{ secrets.CLIENT_ID }}
+      #     client-secret: ${{ secrets.CLIENT_SECRET }}
+      #     org: krogertechnology
+      #     is-secret: false
+
+      # - name: Change .gitconfig # needed to download other internal repos
+      #   env:
+      #     TOKEN: ${{ steps.create-token.outputs.token }}
+      #   run: |
+      #     git config --global url."https://x-access-token:${TOKEN}@github.com".insteadOf https://github.com
+      # # end section
+
+      # - name: Install Golang
+      #   uses: actions/setup-go@v2
+      #   with:
+      #     go-version: "~>1.16.1" # The Go version to download (if necessary) and use.
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init -backend-config="backend-${{ needs.bootstrap.outputs.ENVIRONMENT }}.hcl"  -input=false
+
+      - name: Terraform Validate
+        run: |
+          terraform validate
+          terraform state list
+          
+          
+          
+          
+          
+
+      - uses: terraform-linters/setup-tflint@v1
+        name: Setup TFLint
+        with:
+          tflint_version: v0.29.1
+      
+      - name: Run tflint
+        # only run on PRs -- recursive needs figured out ... going to be cumbersome
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          tflint --init ;
+          tflint --loglevel=info . ;
+
+      # #   # login before tests run
+      # # - name: Azure Login
+      # #   # only run on PRs
+      # #   if: ${{ github.event_name == 'pull_request' }}
+      # #   run: |
+      # #     az login --service-principal --username ${{ secrets.ARM_CLIENT_ID }} --tenant ${{ env.ARM_TENANT_ID }} -p=${{ secrets.ARM_CLIENT_SECRET }}
+      
+      # # - name: Run Unit Tests
+      # #   # only run on PRs
+      # #   if: ${{ github.event_name == 'pull_request' }}
+      # #   uses: magefile/mage-action@v1
+      # #   env:
+      # #     TF_VAR_github_token: ${{ steps.create-token.outputs.token }}
+      # #   with:
+      # #     version: v1.5.0
+      # #     args: unit
+      # #     workdir: ./repo
+
+      # # - name: Run Integration Tests
+      # #   # only run on PRs
+      # #   if: ${{ github.event_name == 'pull_request' }}
+      # #   uses: magefile/mage-action@v1
+      # #   env:
+      # #     TF_VAR_github_token: ${{ steps.create-token.outputs.token }}
+      # #   with:
+      # #     version: v1.5.0
+      # #     args: integration
+      # #     workdir: ./repo
+
+      # - name: Install doc tools
+      #   # only run on PRs -- generates README.md documentation based on .tf code
+      #   if: ${{ github.event_name == 'pull_request' }}
+      #   run: |
+      #     GO111MODULE="on" go get github.com/terraform-docs/terraform-docs@v0.14.1 && \
+      #     mkdir -p ~/.local/bin && npm config set prefix '~/.local/' && npm install -g doctoc
+      
+      # - name: Run doc tools
+      #   # only run on PRs -- generates README.md documentation based on .tf code
+      #   if: ${{ github.event_name == 'pull_request' }}
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     terraform-docs . && ~/.local/bin/doctoc README.md
+
+      - name: Terraform Refresh
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          terraform refresh -var-file="environments/${{ needs.bootstrap.outputs.ENVIRONMENT }}.tfvars" -input=false
+
+      - name: Terraform Plan
+        id: plan
+        # if a PR set REFRESH to true
+        run: |
+          REFRESH=$([ ! "${GITHUB_EVENT_NAME}" = "pull_request" ] && echo "false" || echo "true")
+          terraform plan -var-file="environments/${{ needs.bootstrap.outputs.ENVIRONMENT }}.tfvars" -out=plan.tf -detailed-exitcode -input=false -refresh=${REFRESH}
+          TF_EXIT_CODE=$?
+          if [ ${TF_EXIT_CODE} -eq 2 ] ; then
+            echo "Changes to the infrastructure were detected. Do not remove this line."
+            echo "::set-output name=plan-exitcode::2"
+            exit 0
+          else
+            exit ${TF_EXIT_CODE}
+          fi
+
+      # no need to check for exit 1; terraform validate catches that
+      - name: Create Artifact
+        if: ${{ steps.plan.outputs.plan-exitcode == 2 && github.event_name != 'pull_request' }}
+        run: |
+          tar --exclude="./terraform.tar" --exclude="./tests" --exclude="./.github" --exclude-vcs -cvf terraform.tar .
+
+      - name: Upload Artifact
+        if: ${{ steps.plan.outputs.plan-exitcode == 2 && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: terraform-plan
+          path: ./repo/terraform.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  # apply any planned changes
+  apply:
+    needs: [bootstrap, plan]
+    environment:
+      name: ${{ needs.bootstrap.outputs.ENVIRONMENT }}
+    if: needs.plan.result == 'success' && needs.plan.outputs.plan-exitcode == 2 && github.event_name != 'pull_request'
+    runs-on: on-prem
+    steps:
+      - uses: actions/download-artifact@v2
+        with:
+          name: terraform-plan
+
+      - name: Extract tarball
+        run: |
+          tar -xvf terraform.tar
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -input=false -auto-approve plan.tf
+
+      - name: Delete artifact
+        if: always()
+        uses: geekyeggo/delete-artifact@v1
+        with:
+          name: terraform-plan
+
+  documentation:
+    name: Document Terraform Modules
+    runs-on: on-prem
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Document key-vault Module
+        uses: terraform-docs/gh-actions@v0.10.0
+        with:
+          working-dir: ./modules/keyvault
+          output-file: USAGE.md
+          output-method: inject
+          git-push: true
+      - name: Document storageaccount Module
+        uses: terraform-docs/gh-actions@v0.10.0
+        with:
+          working-dir: ./modules/storage_account
+          output-file: USAGE.md
+          output-method: inject
+          git-push: true 
+      - name: Document RSV Module
+        uses: terraform-docs/gh-actions@v0.10.0
+        with:
+          working-dir: ./modules/RSV
+          output-file: USAGE.md
+          output-method: inject
+          git-push: true           
+      - name: Document Main Directory
+        uses: terraform-docs/gh-actions@v0.10.0
+        with:
+          working-dir: .
+          output-file: USAGE.md
+          output-method: inject
+          git-push: true        
