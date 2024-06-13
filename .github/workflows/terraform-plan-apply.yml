@@ -300,28 +300,28 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
       - name: Document key-vault Module
-        uses: terraform-docs/gh-actions@v0.10.0
+        uses: terraform-docs/gh-actions@v1.2.0
         with:
           working-dir: ./modules/keyvault
           output-file: USAGE.md
           output-method: inject
           git-push: true
       - name: Document storageaccount Module
-        uses: terraform-docs/gh-actions@v0.10.0
+        uses: terraform-docs/gh-actions@v1.2.0
         with:
           working-dir: ./modules/storage_account
           output-file: USAGE.md
           output-method: inject
           git-push: true 
       - name: Document RSV Module
-        uses: terraform-docs/gh-actions@v0.10.0
+        uses: terraform-docs/gh-actions@v1.2.0
         with:
           working-dir: ./modules/RSV
           output-file: USAGE.md
           output-method: inject
           git-push: true           
       - name: Document Main Directory
-        uses: terraform-docs/gh-actions@v0.10.0
+        uses: terraform-docs/gh-actions@v1.2.0
         with:
           working-dir: .
           output-file: USAGE.md
