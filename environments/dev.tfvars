@@ -1,0 +1,39 @@
+resource_group_name = "rg-sc-rea-dev-eastus2"
+location            = "eastus2"
+#SPM                            = ""
+environment_tag                 = "dev"
+application_name                = "REA"
+owner                           = "Eric.Christmann@kroger.com"
+key_vault_name                  = "kv-rea-dev-eastus2-001"
+deploy_keyvault_resources       = true
+enabled_for_disk_encryption     = true
+enabled_for_template_deployment = false
+enabled_for_deployment          = true
+kv_virtual_network_subnet_ids   = ["/subscriptions/0e06fee6-b7f3-4194-979a-e16195abcbfa/resourceGroups/networking-eastus2/providers/Microsoft.Network/virtualNetworks/sc-nonprod-eastus2-vnet/subnets/sc-rea-vm-nonprod-eastus2-sb"]
+object_id_group                 = "f96bd7aa-a67d-48d1-acb1-99f25d52322b"
+
+## storage-account
+# deploy_storage_account_resources = true
+# storage_ac_name                  = "streadeveastus2001test01"
+# account_tier                     = "Standard"
+# account_replication_type         = "LRS"
+# account_kind                     = "FileStorage"
+# access_tier                      = "Hot"
+# sa_subnet_id                     = "/subscriptions/0e06fee6-b7f3-4194-979a-e16195abcbfa/resourceGroups/networking-eastus2/providers/Microsoft.Network/virtualNetworks/sc-nonprod-eastus2-vnet/subnets/sc-rea-vm-nonprod-eastus2-sb"
+# sa_pep_name                      = "pep-reap-prod-eastus2-002"
+# sa_pep_subnet_id                 = "/subscriptions/0e06fee6-b7f3-4194-979a-e16195abcbfa/resourceGroups/networking-eastus2/providers/Microsoft.Network/virtualNetworks/private-endpoint-01-for-nonprod-eastus2-vnet/subnets/private-endpoint"
+# sa_pdzg_name                     = "st-pep-pdzg-rea-dev-eastus2"
+# sa_pe_connection_name            = "st-pep-psc-rea-dev-eastus2"
+# sa_subresource_names             = ["file"]
+## RSV
+# deploy_RSV_resources          = true
+# public_network_access_enabled = false
+# rsv_name                      = "bvault-rea-dev-eastus2-01"
+# rsv_sku                       = "RS0"
+# rsv_pep_name                  = "pep-rea-dev-eastus2-01"
+# rsv_pep_subnet_id             = "/subscriptions/0e06fee6-b7f3-4194-979a-e16195abcbfa/resourceGroups/networking-eastus2/providers/Microsoft.Network/virtualNetworks/private-endpoint-01-for-nonprod-eastus2-vnet/subnets/private-endpoint"
+# rsv_pdzg_name                 = "bvault-pep-pdzg-rea-dev-eastus2"
+# private_dns_zone_ids          = ["/subscriptions/1e0f8390-cb60-4744-80ce-9342a7e8a03a/resourceGroups/rg-private-endpoint-dns-eastus2/providers/Microsoft.Network/privateDnsZones/privatelink.eus2.backup.windowsazure.com", "/subscriptions/1e0f8390-cb60-4744-80ce-9342a7e8a03a/resourceGroups/rg-private-endpoint-dns-eastus2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"]
+# rsv_pe_connection_name        = "bvault-pep-psc-rea-dev-eastus2"
+# rsv_subresource_names         = ["AzureBackup"]
+# rsv_soft_delete_enabled       = false
